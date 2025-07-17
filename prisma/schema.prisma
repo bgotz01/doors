@@ -1,0 +1,144 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Door Collection Models
+model Category {
+  id            String        @id @default(cuid())
+  name          String        @unique
+  subcategories Subcategory[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@map("categories")
+}
+
+model Subcategory {
+  id         String   @id @default(cuid())
+  name       String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId String
+  doors      Door[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([categoryId, name])
+  @@map("subcategories")
+}
+
+model Door {
+  id              String      @id @default(cuid())
+  name            String // e.g., MAH-F, MAH-RP
+  subcategory     Subcategory @relation(fields: [subcategoryId], references: [id], onDelete: Cascade)
+  subcategoryId   String
+  subcategoryName String // Store subcategory name for easier access
+  categoryName    String // Store category name for easier access
+  material        String // e.g., "mahogany", "oak", "steel"
+  height          String // e.g., "6'8", "8'0"
+  widths          String[] // Array of available widths: ["32", "34", "36", "40", "42"]
+  basePrice       Float? // Base price for this door model
+  pricePerSize    Json? // JSON object with size-specific pricing
+  description     String?
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  images     DoorImage[]
+  quoteItems QuoteItem[]
+
+  @@unique([subcategoryId, name])
+  @@map("doors")
+}
+
+model DoorImage {
+  id        String   @id @default(cuid())
+  door      Door     @relation(fields: [doorId], references: [id], onDelete: Cascade)
+  doorId    String
+  imageUrl  String // Can be local path (/images/doors/MAH-F-1.jpg) or AWS S3 URL
+  altText   String? // Alt text for accessibility
+  isPrimary Boolean  @default(false) // Mark one image as primary/main
+  sortOrder Int      @default(0) // For ordering images
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("door_images")
+}
+
+// Quote System
+model Quote {
+  id          String   @id @default(cuid())
+  quoteNumber String   @unique @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Customer Info
+  customerName    String
+  customerEmail   String
+  customerPhone   String?
+  customerAddress String?
+
+  // Quote Items
+  items QuoteItem[]
+
+  // Pricing
+  subtotal    Float @default(0)
+  taxRate     Float @default(0)
+  taxAmount   Float @default(0)
+  totalAmount Float @default(0)
+
+  // Additional Options
+  installation     Boolean @default(false)
+  installationCost Float   @default(0)
+  delivery         Boolean @default(false)
+  deliveryCost     Float   @default(0)
+
+  // Status and Notes
+  status     QuoteStatus @default(DRAFT)
+  notes      String?
+  validUntil DateTime?
+
+  @@map("quotes")
+}
+
+model QuoteItem {
+  id      String @id @default(cuid())
+  quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  quoteId String
+  door    Door   @relation(fields: [doorId], references: [id])
+  doorId  String
+
+  // Selected specifications
+  size       String // Selected size from available sizes
+  quantity   Int    @default(1)
+  unitPrice  Float
+  totalPrice Float
+
+  // Customizations
+  finish      String?
+  hardware    String?
+  glassInsert Boolean @default(false)
+  glassType   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("quote_items")
+}
+
+enum QuoteStatus {
+  DRAFT
+  PENDING
+  SENT
+  APPROVED
+  REJECTED
+  EXPIRED
+}
