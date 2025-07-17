@@ -1,131 +1,170 @@
+//components/DoorSelector.tsx
+
 "use client";
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
-interface Category {
+interface Supplier {
+  id: string;
+  name: string;
+  location?: string;
+}
+
+interface Material {
   id: string;
   name: string;
 }
 
-interface Subcategory {
+interface Collection {
   id: string;
   name: string;
-  categoryId: string;
+  materialId: string;
 }
 
-interface Door {
+interface Panel {
   id: string;
+  code: string;
   name: string;
-  widths: string[];
-  basePrice: number | null;
-  subcategoryId: string;
-  categoryName: string;
-  subcategoryName: string;
   material: string;
+  collection: string;
   height: string;
-  subcategory: {
-    name: string;
-    category: {
+  widths: string[];
+  description?: string;
+  imageUrl?: string;
+  supplierPanels: {
+    id: string;
+    basePrice: number | null;
+    pricePerWidth: unknown;
+    supplier: {
+      id: string;
       name: string;
     };
-  };
+  }[];
 }
 
 export default function DoorSelector() {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
-  const [doors, setDoors] = useState<Door[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [panels, setPanels] = useState<Panel[]>([]);
 
-  const [selectedCategory, setSelectedCategory] = useState<string>("");
-  const [selectedSubcategory, setSelectedSubcategory] = useState<string>("");
+  const [selectedSupplier, setSelectedSupplier] = useState<string>("");
+  const [selectedMaterial, setSelectedMaterial] = useState<string>("");
+  const [selectedCollection, setSelectedCollection] = useState<string>("");
   const [selectedHeight, setSelectedHeight] = useState<string>("");
-  const [selectedDoor, setSelectedDoor] = useState<Door | null>(null);
+  const [selectedPanel, setSelectedPanel] = useState<Panel | null>(null);
   const [selectedSize, setSelectedSize] = useState<string>("");
 
   const [availableHeights, setAvailableHeights] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch categories on component mount
+  // Fetch suppliers and materials on component mount
   useEffect(() => {
-    fetchCategories();
+    fetchSuppliers();
+    fetchMaterials();
   }, []);
 
-  // Fetch subcategories when category changes
+  // Fetch collections when material changes
   useEffect(() => {
-    if (selectedCategory) {
-      fetchSubcategories(selectedCategory);
-      setSelectedSubcategory("");
-      setSelectedDoor(null);
+    if (selectedMaterial) {
+      fetchCollections(selectedMaterial);
+      setSelectedCollection("");
+      setSelectedPanel(null);
     }
-  }, [selectedCategory]);
+  }, [selectedMaterial]);
 
-  // Fetch doors when subcategory changes
+  // Fetch panels when material, collection, or supplier changes
   useEffect(() => {
-    if (selectedSubcategory) {
-      fetchDoors(selectedSubcategory);
-      setSelectedDoor(null);
+    if (selectedMaterial) {
+      // If "All" is selected (empty string) or a specific collection is selected
+      fetchPanels(selectedMaterial, selectedCollection, selectedSupplier);
+      setSelectedPanel(null);
       setSelectedHeight("");
     }
-  }, [selectedSubcategory]);
+  }, [selectedCollection, selectedMaterial, selectedSupplier]);
 
-  // Update available heights when doors change
+  // Update available heights when panels change
   useEffect(() => {
-    if (doors.length > 0) {
-      const heights = [...new Set(doors.map((door) => door.height))];
+    if (panels.length > 0) {
+      const heights = [...new Set(panels.map((panel) => panel.height))];
       setAvailableHeights(heights);
     }
-  }, [doors]);
+  }, [panels]);
 
-  const fetchCategories = async () => {
+  const fetchSuppliers = async () => {
     try {
-      const response = await fetch("/api/categories");
+      const response = await fetch("/api/suppliers");
       const data = await response.json();
-      setCategories(data);
+      setSuppliers(data);
     } catch (error) {
-      console.error("Error fetching categories:", error);
+      console.error("Error fetching suppliers:", error);
+    }
+  };
+
+  const fetchMaterials = async () => {
+    try {
+      const response = await fetch("/api/materials");
+      const data = await response.json();
+      setMaterials(data);
+    } catch (error) {
+      console.error("Error fetching materials:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchSubcategories = async (categoryId: string) => {
+  const fetchCollections = async (material: string) => {
     try {
-      const response = await fetch(
-        `/api/subcategories?categoryId=${categoryId}`
-      );
+      const response = await fetch(`/api/collections?material=${material}`);
       const data = await response.json();
-      setSubcategories(data);
+      setCollections(data);
     } catch (error) {
-      console.error("Error fetching subcategories:", error);
+      console.error("Error fetching collections:", error);
     }
   };
 
-  const fetchDoors = async (subcategoryId: string) => {
+  const fetchPanels = async (
+    material: string,
+    collection: string,
+    supplierId?: string
+  ) => {
     try {
-      const response = await fetch(`/api/doors?subcategoryId=${subcategoryId}`);
+      // Start with material filter
+      let url = `/api/panels?material=${material}`;
+
+      // Add collection filter only if a specific collection is selected
+      if (collection) {
+        url += `&collection=${collection}`;
+      }
+
+      // Add supplier filter if selected
+      if (supplierId) {
+        url += `&supplierId=${supplierId}`;
+      }
+
+      const response = await fetch(url);
       const data = await response.json();
-      setDoors(data);
+      setPanels(data);
     } catch (error) {
-      console.error("Error fetching doors:", error);
+      console.error("Error fetching panels:", error);
     }
   };
 
-  const handleDoorSelect = (door: Door) => {
-    setSelectedDoor(door);
+  const handlePanelSelect = (panel: Panel) => {
+    setSelectedPanel(panel);
     setSelectedSize("");
   };
 
-  const getImagePath = (door: Door) => {
-    // Use the new path structure: category/material/height
-    const category = door.categoryName.toLowerCase();
-    const material = door.material;
-    const height = door.height;
-    const doorName = door.name; // Keep original case for door name
+  const getImagePath = (panel: Panel) => {
+    // Use the new path structure: material/collection/height
+    const material = panel.material.toLowerCase();
+    const collection = panel.collection.toLowerCase();
+    const height = panel.height;
+    const panelCode = panel.code; // Keep original case for panel code
 
-    return `/images/doors/${category}/${material}/${height}/${doorName}.png`;
+    return `/images/doors/${material}/${collection}/${height}/${panelCode}.png`;
   };
 
   if (loading) {
@@ -144,41 +183,60 @@ export default function DoorSelector() {
           Select Your Door
         </h2>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Category Dropdown */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* Supplier Dropdown */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Category
+              Supplier (Optional)
             </label>
             <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
+              value={selectedSupplier}
+              onChange={(e) => setSelectedSupplier(e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="">Select Category</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
+              <option value="">All Suppliers</option>
+              {suppliers.map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.name}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Subcategory Dropdown */}
+          {/* Material Dropdown */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Subcategory
+              Material
             </label>
             <select
-              value={selectedSubcategory}
-              onChange={(e) => setSelectedSubcategory(e.target.value)}
-              disabled={!selectedCategory}
+              value={selectedMaterial}
+              onChange={(e) => setSelectedMaterial(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">Select Material</option>
+              {materials.map((material) => (
+                <option key={material.id} value={material.id}>
+                  {material.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Collection Dropdown */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Collection
+            </label>
+            <select
+              value={selectedCollection}
+              onChange={(e) => setSelectedCollection(e.target.value)}
+              disabled={!selectedMaterial}
               className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
             >
-              <option value="">Select Subcategory</option>
-              {subcategories.map((subcategory) => (
-                <option key={subcategory.id} value={subcategory.id}>
-                  {subcategory.name}
+              <option value="">All Collections</option>
+              {collections.map((collection) => (
+                <option key={collection.id} value={collection.id}>
+                  {collection.name}
                 </option>
               ))}
             </select>
@@ -212,11 +270,11 @@ export default function DoorSelector() {
             <select
               value={selectedSize}
               onChange={(e) => setSelectedSize(e.target.value)}
-              disabled={!selectedDoor}
+              disabled={!selectedPanel}
               className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
             >
               <option value="">Select Width</option>
-              {selectedDoor?.widths.map((width) => (
+              {selectedPanel?.widths.map((width) => (
                 <option key={width} value={width}>
                   {width}&quot;
                 </option>
@@ -226,55 +284,56 @@ export default function DoorSelector() {
         </div>
       </div>
 
-      {/* Door Grid */}
-      {doors.length > 0 && (
+      {/* Panel Grid */}
+      {panels.length > 0 && (
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h3 className="text-lg font-semibold mb-4 text-gray-900">
-            Available Doors
+            Available Panels
           </h3>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {doors
+            {panels
               .filter(
-                (door) => !selectedHeight || door.height === selectedHeight
+                (panel) => !selectedHeight || panel.height === selectedHeight
               )
-              .map((door) => (
+              .map((panel) => (
                 <div
-                  key={door.id}
-                  onClick={() => handleDoorSelect(door)}
+                  key={panel.id}
+                  onClick={() => handlePanelSelect(panel)}
                   className={`border rounded-lg p-4 cursor-pointer transition-all ${
-                    selectedDoor?.id === door.id
+                    selectedPanel?.id === panel.id
                       ? "border-blue-500 bg-blue-50"
                       : "border-gray-200 hover:border-gray-300"
                   }`}
                 >
                   <div className="aspect-[3/4] bg-gray-100 rounded-md mb-4 overflow-hidden relative">
                     <Image
-                      src={getImagePath(door)}
-                      alt={`${door.name} door`}
+                      src={getImagePath(panel)}
+                      alt={`${panel.code} panel`}
                       fill
                       className="object-contain"
                       onError={() => {
-                        console.log(`Image not found: ${getImagePath(door)}`);
+                        console.log(`Image not found: ${getImagePath(panel)}`);
                       }}
                     />
                   </div>
                   <h4 className="font-semibold text-lg text-gray-900">
-                    {door.name}
+                    {panel.code}
                   </h4>
                   <p className="text-sm text-gray-600 mb-2">
-                    {door.categoryName} {" > "} {door.subcategoryName} {" > "}{" "}
-                    {door.height}
+                    {panel.material} {" > "} {panel.collection} {" > "}{" "}
+                    {panel.height}
                   </p>
                   <p className="text-sm text-gray-600 mb-2">
-                    Available sizes: {door.widths.join('", ')}&quot;
+                    Available sizes: {panel.widths.join('", ')}&quot;
                   </p>
-                  {door.basePrice && (
-                    <p className="text-lg font-semibold text-green-600 mb-3">
-                      Starting at ${door.basePrice}
-                    </p>
-                  )}
+                  {panel.supplierPanels.length > 0 &&
+                    panel.supplierPanels[0].basePrice && (
+                      <p className="text-lg font-semibold text-green-600 mb-3">
+                        Starting at ${panel.supplierPanels[0].basePrice}
+                      </p>
+                    )}
                   <Link
-                    href={`/doors/${door.id}`}
+                    href={`/panels/${panel.id}`}
                     className="inline-block w-full text-center bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -286,28 +345,28 @@ export default function DoorSelector() {
         </div>
       )}
 
-      {/* Selected Door Details */}
-      {selectedDoor && (
+      {/* Selected Panel Details */}
+      {selectedPanel && (
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h3 className="text-xl font-semibold mb-4 text-gray-900">
-            Selected Door Details
+            Selected Panel Details
           </h3>
           <div className="grid md:grid-cols-2 gap-6">
             <div>
               <h4 className="font-semibold text-lg mb-2">
-                {selectedDoor.name}
+                {selectedPanel.code}
               </h4>
               <p className="text-gray-600 mb-2">
-                Category: {selectedDoor.categoryName}
+                Material: {selectedPanel.material}
               </p>
               <p className="text-gray-600 mb-2">
-                Subcategory: {selectedDoor.subcategoryName}
+                Collection: {selectedPanel.collection}
               </p>
               <p className="text-gray-600 mb-2">
-                Height: {selectedDoor.height}
+                Height: {selectedPanel.height}
               </p>
               <p className="text-gray-600 mb-4">
-                Available Sizes: {selectedDoor.widths.join('", ')}\&quot;
+                Available Sizes: {selectedPanel.widths.join('", ')}\&quot;
               </p>
               {selectedSize && (
                 <p className="text-lg font-semibold text-blue-600">
@@ -316,11 +375,12 @@ export default function DoorSelector() {
               )}
             </div>
             <div className="flex flex-col justify-end">
-              {selectedDoor.basePrice && (
-                <p className="text-2xl font-bold text-green-600 mb-4">
-                  Starting at ${selectedDoor.basePrice}
-                </p>
-              )}
+              {selectedPanel.supplierPanels.length > 0 &&
+                selectedPanel.supplierPanels[0].basePrice && (
+                  <p className="text-2xl font-bold text-green-600 mb-4">
+                    Starting at ${selectedPanel.supplierPanels[0].basePrice}
+                  </p>
+                )}
               <button
                 disabled={!selectedSize}
                 className="bg-blue-600 text-white px-6 py-3 rounded-md font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
